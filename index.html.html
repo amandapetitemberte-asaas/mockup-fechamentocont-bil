@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agente de Fechamento Contábil — Databricks Genie</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: #fff;
+    color: #1a1a1a;
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    height: 44px;
+    background: #1b1b1b;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .topbar-logo { display: flex; align-items: center; gap: 7px; color: #fff; font-size: 14px; font-weight: 600; text-decoration: none; flex-shrink: 0; }
+  .topbar-logo svg { flex-shrink: 0; }
+  .topbar-search {
+    flex: 1; max-width: 520px; margin: 0 auto;
+    background: #2e2e2e; border: 1px solid #3a3a3a; border-radius: 4px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 10px; height: 28px; color: #888; font-size: 12px;
+  }
+  .topbar-search svg { flex-shrink: 0; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; color: #ccc; font-size: 12px; }
+  .topbar-workspace { display: flex; align-items: center; gap: 4px; color: #ccc; }
+  .avatar { width: 24px; height: 24px; border-radius: 50%; background: #E53935; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+
+  /* LAYOUT */
+  .layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 176px;
+    background: #1b1b1b;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+  .sidebar-new {
+    margin: 4px 8px 12px;
+    background: #E53935;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: calc(100% - 16px);
+  }
+  .sidebar-section { padding: 4px 0; }
+  .sidebar-section-label { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 12px 4px; }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; color: #ccc; font-size: 12px;
+    cursor: pointer; border-radius: 0; transition: background 0.1s;
+    text-decoration: none;
+  }
+  .sidebar-item:hover { background: #2a2a2a; }
+  .sidebar-item.active { background: #2a2a2a; color: #fff; }
+  .sidebar-item svg { flex-shrink: 0; opacity: 0.7; }
+  .sidebar-item.active svg { opacity: 1; }
+
+  /* MAIN */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  /* CONVERSATION HEADER */
+  .conv-header {
+    height: 44px;
+    border-bottom: 1px solid #e8e8e8;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .conv-title { font-size: 13px; color: #333; display: flex; align-items: center; gap: 4px; }
+  .conv-title-text { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conv-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .conv-btn {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; color: #555; background: none; border: 1px solid #ddd;
+    border-radius: 4px; padding: 4px 10px; cursor: pointer;
+  }
+  .conv-btn:hover { background: #f5f5f5; }
+
+  /* MESSAGES AREA */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 0 0;
+  }
+  .messages-inner { max-width: 860px; margin: 0 auto; padding: 0 32px; }
+
+  /* Screen management */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* USER MESSAGE */
+  .user-msg {
+    display: flex; justify-content: flex-end; margin-bottom: 20px;
+  }
+  .user-bubble {
+    background: #f0f0f0; border-radius: 8px 8px 2px 8px;
+    padding: 10px 14px; font-size: 13px; color: #1a1a1a;
+    max-width: 72%; line-height: 1.5;
+  }
+
+  /* THINKING */
+  .thinking { display: flex; align-items: center; gap: 6px; color: #888; font-size: 12px; margin-bottom: 16px; }
+  .thinking-dot { width: 6px; height: 6px; border-radius: 50%; background: #aaa; }
+
+  /* AGENT RESPONSE */
+  .agent-response { margin-bottom: 20px; }
+  .response-title { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 6px; }
+  .response-text { font-size: 13px; color: #333; line-height: 1.6; margin-bottom: 14px; }
+  .response-text strong { font-weight: 600; color: #1a1a1a; }
+
+  /* METRICS GRID */
+  .db-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+  .db-metric {
+    border: 1px solid #e4e4e4; border-radius: 6px; padding: 12px 14px;
+    background: #fff;
+  }
+  .db-metric-label { font-size: 11px; color: #888; margin-bottom: 5px; }
+  .db-metric-value { font-size: 20px; font-weight: 600; color: #1a1a1a; }
+  .db-metric-value.red { color: #C62828; }
+  .db-metric-value.amber { color: #E65100; }
+  .db-metric-value.green { color: #2E7D32; }
+
+  /* SOURCE TAG */
+  .source-tag {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; color: #888; margin-bottom: 8px; justify-content: flex-end;
+  }
+  .source-tag svg { opacity: 0.5; }
+
+  /* CHART CARD */
+  .chart-card {
+    border: 1px solid #e4e4e4; border-radius: 6px; padding: 16px;
+    margin-bottom: 14px; background: #fff;
+  }
+  .chart-card-title { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-bottom: 14px; }
+  .chart-area { height: 160px; position: relative; }
+
+  /* TABLE */
+  .db-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .db-table th { font-weight: 600; color: #444; padding: 8px 12px; border-bottom: 1px solid #e4e4e4; text-align: left; background: #fafafa; }
+  .db-table td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; color: #333; }
+  .db-table tr:last-child td { border-bottom: none; }
+  .db-table td.red { color: #C62828; }
+  .db-table td.green { color: #2E7D32; }
+
+  /* ALERT ROWS */
+  .db-alert {
+    border: 1px solid #e4e4e4; border-radius: 6px; padding: 12px 14px;
+    margin-bottom: 8px; background: #fff; cursor: pointer;
+    transition: border-color 0.15s; display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .db-alert:hover { border-color: #bbb; }
+  .db-alert.critical { border-left: 3px solid #E53935; }
+  .db-alert.moderate { border-left: 3px solid #FB8C00; }
+  .db-alert.ok { border-left: 3px solid #43A047; cursor: default; }
+  .db-alert-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .db-alert-sub { font-size: 12px; color: #666; }
+  .db-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
+  .db-badge { font-size: 11px; padding: 2px 7px; border-radius: 3px; font-weight: 500; }
+  .db-badge.red { background: #FFEBEE; color: #C62828; }
+  .db-badge.amber { background: #FFF3E0; color: #E65100; }
+  .db-badge.green { background: #E8F5E9; color: #2E7D32; }
+  .db-badge.blue { background: #E3F2FD; color: #1565C0; }
+  .chevron { color: #bbb; font-size: 16px; flex-shrink: 0; margin-left: 8px; margin-top: 2px; }
+
+  /* DETAIL */
+  .detail-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .db-analysis-table { border: 1px solid #e4e4e4; border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
+  .db-row { display: flex; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+  .db-row:last-child { border-bottom: none; }
+  .db-row-label { color: #666; }
+  .db-row-val { font-weight: 500; }
+  .ai-diag { background: #EDE7F6; border-radius: 6px; padding: 13px 15px; font-size: 12px; color: #311B92; line-height: 1.6; margin-bottom: 10px; }
+  .jestor-diag { background: #FFF3E0; border-radius: 6px; padding: 13px 15px; font-size: 12px; color: #BF360C; line-height: 1.6; margin-bottom: 14px; }
+  .action-tag { display: inline-block; font-size: 11px; padding: 4px 10px; border-radius: 3px; background: #f5f5f5; color: #444; border: 1px solid #ddd; margin-right: 6px; margin-bottom: 6px; }
+  .section-lbl { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 7px; margin-top: 14px; }
+
+  /* FEEDBACK ROW */
+  .feedback-row { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
+  .feedback-left { display: flex; align-items: center; gap: 8px; color: #888; font-size: 12px; }
+  .thumb-btn { background: none; border: 1px solid #ddd; border-radius: 3px; padding: 3px 7px; cursor: pointer; color: #888; font-size: 12px; }
+  .thumb-btn:hover { background: #f5f5f5; }
+  .download-btn { display: flex; align-items: center; gap: 5px; color: #1976D2; font-size: 12px; background: none; border: none; cursor: pointer; }
+
+  /* INPUT AREA */
+  .input-area {
+    border-top: 1px solid #e8e8e8;
+    padding: 12px 32px 16px;
+    background: #fff;
+    flex-shrink: 0;
+    max-width: 860px;
+    width: 100%;
+    margin: 0 auto;
+    align-self: center;
+    position: relative;
+    z-index: 50;
+  }
+  .input-box {
+    border: 1px solid #ddd; border-radius: 6px;
+    font-size: 13px; color: #999;
+    margin-bottom: 8px; width: 100%;
+    display: flex; align-items: center;
+    overflow: hidden;
+  }
+  .input-tabs { display: flex; gap: 6px; }
+  .input-tab {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; color: #555; background: none;
+    border: 1px solid #ddd; border-radius: 20px;
+    padding: 4px 12px; cursor: pointer;
+  }
+  .input-tab:hover { background: #f5f5f5; }
+  .send-btn { background: none; border: none; color: #bbb; cursor: pointer; font-size: 16px; }
+  .footer-note { text-align: center; font-size: 11px; color: #aaa; margin-top: 6px; }
+
+  /* BACK BTN */
+  .back-btn {
+    display: flex; align-items: center; gap: 6px;
+    background: none; border: 1px solid #ddd; border-radius: 4px;
+    padding: 5px 12px; font-size: 12px; color: #555; cursor: pointer; margin-bottom: 16px;
+  }
+  .back-btn:hover { background: #f5f5f5; }
+
+  /* SVG inline bar chart */
+  .bar-chart-svg { width: 100%; height: 160px; }
+  .line-chart-svg { width: 100%; height: 160px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <svg width="20" height="20" viewBox="0 0 40 40" fill="none">
+      <path d="M20 4L36 13V27L20 36L4 27V13L20 4Z" fill="#E53935"/>
+      <path d="M20 10L30 16V22L20 28L10 22V16L20 10Z" fill="#fff" opacity="0.3"/>
+    </svg>
+    databricks
+  </div>
+  <div class="topbar-search">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="#888" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#888" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <span>Search data, notebooks, recents, and more...</span>
+    <span style="margin-left:auto;font-size:11px;background:#3a3a3a;padding:1px 6px;border-radius:3px;">CTRL + P</span>
+  </div>
+  <div class="topbar-right">
+    <div class="topbar-workspace">asaas-workspace <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 4L5 7L8 4" stroke="#ccc" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a5 5 0 100 10A5 5 0 008 1zM1 8a7 7 0 1114 0A7 7 0 011 8z" fill="#888"/></svg>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="#888"/><rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="#888"/><rect x="2" y="11.5" width="12" height="1.5" rx="0.75" fill="#888"/></svg>
+    <div class="avatar">A</div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <button class="sidebar-new">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+      New
+    </button>
+
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="#aaa"/><rect x="9" y="2" width="5" height="5" rx="1" fill="#aaa"/><rect x="2" y="9" width="5" height="5" rx="1" fill="#aaa"/><rect x="9" y="9" width="5" height="5" rx="1" fill="#aaa"/></svg>
+      Workspace
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#aaa" stroke-width="1.5"/><path d="M8 5v3.5l2 2" stroke="#aaa" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Recents
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h8M2 12h10" stroke="#aaa" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Catalog
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="12" height="8" rx="1.5" stroke="#aaa" stroke-width="1.5"/><path d="M5 5V3.5A1.5 1.5 0 016.5 2h3A1.5 1.5 0 0111 3.5V5" stroke="#aaa" stroke-width="1.5"/></svg>
+      Jobs &amp; Pipelines
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#aaa" stroke-width="1.5"/><path d="M5 8h6M8 5v6" stroke="#aaa" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Compute
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#aaa" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Marketplace
+    </a>
+
+    <div class="sidebar-section-label">SQL</div>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M3 8h7M3 12h5" stroke="#aaa" stroke-width="1.5" stroke-linecap="round"/></svg>
+      SQL Editor
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="6" r="4" stroke="#aaa" stroke-width="1.5"/><path d="M9.5 9.5L13 13" stroke="#aaa" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Queries
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="9" rx="1" stroke="#aaa" stroke-width="1.5"/><path d="M5 4V3M8 4V2M11 4V3" stroke="#aaa" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Dashboards
+    </a>
+    <a class="sidebar-item active">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" fill="#E53935" opacity="0.9"/></svg>
+      Genie
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2a1 1 0 00-1 1v.5A4.5 4.5 0 003.5 8v2l-1.5 1.5V13h12v-1.5L12.5 10V8A4.5 4.5 0 009 3.5V3a1 1 0 00-1-1zM6 13a2 2 0 004 0" stroke="#aaa" stroke-width="1.4"/></svg>
+      Alerts
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 12V10l4-4 3 3 5-6" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Query History
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="#aaa" stroke-width="1.5"/><path d="M5 7h6M5 10h4" stroke="#aaa" stroke-width="1.3" stroke-linecap="round"/></svg>
+      SQL Warehouses
+    </a>
+
+    <div class="sidebar-section-label">Data Engineering</div>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="4" r="2" stroke="#aaa" stroke-width="1.4"/><circle cx="3" cy="12" r="2" stroke="#aaa" stroke-width="1.4"/><circle cx="13" cy="12" r="2" stroke="#aaa" stroke-width="1.4"/><path d="M8 6v2M8 8L3 10M8 8l5 2" stroke="#aaa" stroke-width="1.3"/></svg>
+      Runs
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8h3l2-5 3 9 2-4h2" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Data Ingestion
+    </a>
+
+    <div class="sidebar-section-label">AI/ML</div>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#aaa" stroke-width="1.4"/><path d="M5 8l2 2 4-4" stroke="#aaa" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Playground
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="#aaa" stroke-width="1.5"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2" stroke="#aaa" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Agents
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 12l4-4 3 3 5-7" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Experiments
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 13V7l5-5 5 5v6H3z" stroke="#aaa" stroke-width="1.4"/><rect x="6" y="9" width="4" height="4" rx="0.5" fill="#aaa"/></svg>
+      Features
+    </a>
+    <a class="sidebar-item">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="4" rx="1" stroke="#aaa" stroke-width="1.4"/><rect x="2" y="10" width="12" height="4" rx="1" stroke="#aaa" stroke-width="1.4"/><path d="M5 6v4M11 6v4" stroke="#aaa" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Models
+    </a>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="conv-header">
+      <div class="conv-title">
+        <span class="conv-title-text">Conferência de fechamento contábil — Março 2025</span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 5l3 3 3-3" stroke="#888" stroke-width="1.3" stroke-linecap="round"/></svg>
+      </div>
+      <div class="conv-actions">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="3" y="3" width="10" height="10" rx="1.5" stroke="#888" stroke-width="1.4"/><path d="M6 3V2M10 3V2M3 7h10" stroke="#888" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h8M2 12h10" stroke="#888" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <button class="conv-btn">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#555" stroke-width="1.4"/><path d="M8 5v3.5l2 2" stroke="#555" stroke-width="1.4" stroke-linecap="round"/></svg>
+          Context
+        </button>
+        <button class="conv-btn">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 8h8M10 5l3 3-3 3" stroke="#555" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Share
+        </button>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="8" r="1.2" fill="#666"/><circle cx="8" cy="8" r="1.2" fill="#666"/><circle cx="13" cy="8" r="1.2" fill="#666"/></svg>
+      </div>
+    </div>
+
+    <div class="messages">
+      <div class="messages-inner">
+
+        <!-- SCREEN 1: Configuração -->
+        <div class="screen active" id="screen1">
+          <div class="user-msg">
+            <div class="user-bubble">Executar conferência de fechamento contábil — Março 2025</div>
+          </div>
+          <div class="thinking">
+            <div class="thinking-dot"></div>
+            <span>Thinking complete</span>
+          </div>
+          <div class="agent-response">
+            <div class="response-title">Conferência de Fechamento Contábil — Março 2025</div>
+            <div class="response-text">
+              Análise concluída em <strong>1m 42s</strong> com base nos dados do Sinqia disponíveis no lake (última atualização hoje às 06:14). Comparação com <strong>fevereiro 2025</strong>. Foram analisadas <strong>25 contas de custo</strong> com thresholds: variação ≥ 5%, valor ≥ R$ 10k, acumulado 12 meses.
+            </div>
+
+            <div class="section-lbl">Resumo geral</div>
+            <div class="db-metrics">
+              <div class="db-metric">
+                <div class="db-metric-label">Contas analisadas</div>
+                <div class="db-metric-value">25</div>
+              </div>
+              <div class="db-metric">
+                <div class="db-metric-label">Alertas críticos</div>
+                <div class="db-metric-value red">2</div>
+              </div>
+              <div class="db-metric">
+                <div class="db-metric-label">Alertas moderados</div>
+                <div class="db-metric-value amber">4</div>
+              </div>
+              <div class="db-metric">
+                <div class="db-metric-label">Sem alerta</div>
+                <div class="db-metric-value green">19</div>
+              </div>
+            </div>
+
+            <div class="section-lbl">Alertas críticos — requerem revisão</div>
+            <div class="db-alert critical" onclick="goTo(2,'energia')">
+              <div>
+                <div class="db-alert-title">94-9 Energia elétrica</div>
+                <div class="db-badges">
+                  <span class="db-badge red">+38% vs. mês anterior</span>
+                  <span class="db-badge red">+R$ 87.400</span>
+                  <span class="db-badge amber">Acumulado 12m: +62%</span>
+                </div>
+                <div class="db-alert-sub" style="margin-top:6px;">Causa identificada no Jestor: pagamento lançado em CR incorreto (TI / deveria ser Operações)</div>
+              </div>
+              <span class="chevron">›</span>
+            </div>
+
+            <div class="db-alert critical" onclick="goTo(2,'software')">
+              <div>
+                <div class="db-alert-title">101-5 Licença de software</div>
+                <div class="db-badges">
+                  <span class="db-badge red">+52% vs. mês anterior</span>
+                  <span class="db-badge red">+R$ 124.000</span>
+                  <span class="db-badge blue">YoY: +18%</span>
+                </div>
+                <div class="db-alert-sub" style="margin-top:6px;">Causa não identificada automaticamente — requer revisão manual</div>
+              </div>
+              <span class="chevron">›</span>
+            </div>
+
+            <div class="section-lbl" style="margin-top:14px;">Alertas moderados</div>
+            <div class="db-alert moderate">
+              <div>
+                <div class="db-alert-title">112-0 Telefone e internet</div>
+                <div class="db-badges">
+                  <span class="db-badge amber">+12% vs. mês anterior</span>
+                  <span class="db-badge amber">+R$ 14.200</span>
+                </div>
+              </div>
+              <span class="chevron">›</span>
+            </div>
+            <div class="db-alert moderate">
+              <div>
+                <div class="db-alert-title">115/09 Contas de People</div>
+                <div class="db-badges">
+                  <span class="db-badge amber">+9% vs. mês anterior</span>
+                  <span class="db-badge amber">Acumulado 6m: +28%</span>
+                </div>
+              </div>
+              <span class="chevron">›</span>
+            </div>
+
+            <div class="section-lbl" style="margin-top:14px;">Sem alerta — dentro dos parâmetros</div>
+            <div class="db-alert ok">
+              <div style="font-size:12px;color:#555;">73-6 Conta de aluguel · 76-0 Associações · 97-3 Infraestrutura · e mais 16 contas</div>
+              <span class="db-badge green">19 contas ok</span>
+            </div>
+
+            <div class="feedback-row">
+              <div class="feedback-left">
+                Is this useful?
+                <button class="thumb-btn">👍</button>
+                <button class="thumb-btn">👎</button>
+              </div>
+              <button class="download-btn">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v9M5 8l3 3 3-3" stroke="#1976D2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="#1976D2" stroke-width="1.5" stroke-linecap="round"/></svg>
+                Download PDF
+              </button>
+            </div>
+
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid #f0f0f0;">
+              <button onclick="goTo(3)" style="display:flex;align-items:center;gap:8px;background:#1b1b1b;color:#fff;border:none;border-radius:6px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#E53935'" onmouseout="this.style.background='#1b1b1b'">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M3 8h7M3 12h5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
+                Gerar relatório para o time contábil
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SCREEN 2: Detalhe -->
+        <div class="screen" id="screen2">
+          <button class="back-btn" onclick="goTo(1)">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8 2L4 6l4 4" stroke="#555" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Voltar ao dashboard
+          </button>
+
+          <div class="user-msg">
+            <div class="user-bubble" id="detail-user-q">Ver detalhes: 94-9 Energia elétrica</div>
+          </div>
+          <div class="thinking">
+            <div class="thinking-dot"></div>
+            <span>Thinking complete</span>
+          </div>
+
+          <div class="agent-response">
+            <div class="response-title" id="detail-title">94-9 Energia elétrica</div>
+
+            <div class="detail-metrics">
+              <div class="db-metric">
+                <div class="db-metric-label">Mês atual</div>
+                <div style="font-size:17px;font-weight:600;" id="detail-atual"></div>
+              </div>
+              <div class="db-metric">
+                <div class="db-metric-label">Mês anterior</div>
+                <div style="font-size:17px;font-weight:600;" id="detail-anterior"></div>
+              </div>
+              <div class="db-metric">
+                <div class="db-metric-label" style="color:#C62828;">Variação</div>
+                <div style="font-size:17px;font-weight:600;color:#C62828;" id="detail-var"></div>
+              </div>
+            </div>
+
+            <div class="source-tag">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#888" stroke-width="1.4"/><path d="M5 8h6M8 5v6" stroke="#888" stroke-width="1.3" stroke-linecap="round"/></svg>
+              Source: Sinqia — dados de custo mar/2025
+            </div>
+
+            <div class="section-lbl">Análise multicamada</div>
+            <div class="db-analysis-table">
+              <div class="db-row"><span class="db-row-label">Variação mensal (%)</span><span class="db-row-val" id="d-pct"></span></div>
+              <div class="db-row"><span class="db-row-label">Variação mensal (R$)</span><span class="db-row-val" id="d-rs"></span></div>
+              <div class="db-row"><span class="db-row-label">Acumulado 12 meses</span><span class="db-row-val" id="d-acum"></span></div>
+              <div class="db-row"><span class="db-row-label">Quarter vs. quarter</span><span class="db-row-val" id="d-qoq"></span></div>
+              <div class="db-row"><span class="db-row-label">Mesmo mês ano anterior</span><span class="db-row-val" id="d-yoy"></span></div>
+            </div>
+
+            <div class="section-lbl">Diagnóstico do agente</div>
+            <div class="ai-diag" id="ai-diag"></div>
+
+            <div class="section-lbl">Achado no Jestor</div>
+            <div class="jestor-diag" id="jestor-diag"></div>
+
+            <div class="section-lbl">Ação sugerida</div>
+            <div id="action-tags"></div>
+
+            <div class="feedback-row">
+              <div class="feedback-left">
+                Is this useful?
+                <button class="thumb-btn">👍</button>
+                <button class="thumb-btn">👎</button>
+              </div>
+              <button class="download-btn">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v9M5 8l3 3 3-3" stroke="#1976D2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="#1976D2" stroke-width="1.5" stroke-linecap="round"/></svg>
+                Download PDF
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SCREEN 3: Relatório -->
+        <div class="screen" id="screen3">
+          <div class="user-msg">
+            <div class="user-bubble" id="report-user-q">Gere um relatório para o time contábil com as variações e motivos</div>
+          </div>
+          <div class="thinking">
+            <div class="thinking-dot"></div>
+            <span>Thinking complete</span>
+          </div>
+          <div class="agent-response">
+            <div class="response-title">Relatório de Fechamento Contábil — Março 2025</div>
+            <div class="response-text" style="color:#666;font-size:12px;margin-bottom:16px;">Gerado pelo Agente de Fechamento · Databricks Genie · 10/04/2025 às 09:32 · Comparação: fevereiro 2025</div>
+
+            <div style="background:#f9f9f9;border:1px solid #e4e4e4;border-radius:6px;padding:18px 20px;margin-bottom:16px;">
+
+              <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:4px;">Para: Time Contábil — Asaas</div>
+              <div style="font-size:12px;color:#888;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e8e8e8;">Assunto: Conferência de Fechamento Contábil — Alertas e Justificativas · Março 2025</div>
+
+              <div style="font-size:13px;color:#333;line-height:1.7;margin-bottom:14px;">
+                A análise automática de fechamento referente a <strong>março de 2025</strong> identificou <strong>2 alertas críticos</strong> e <strong>4 alertas moderados</strong> entre as 25 contas de custo monitoradas. Abaixo seguem os detalhes das variações e os motivos identificados pelo agente.
+              </div>
+
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:8px;">⚠ Alertas Críticos</div>
+
+              <div style="border:1px solid #FFCDD2;border-radius:6px;padding:14px 16px;margin-bottom:10px;background:#fff;">
+                <div style="font-size:13px;font-weight:700;color:#C62828;margin-bottom:6px;">1. 94-9 Energia Elétrica — Variação de +38% (+R$ 87.400)</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+                  <div style="background:#f5f5f5;border-radius:4px;padding:8px 10px;">
+                    <div style="font-size:10px;color:#888;margin-bottom:2px;">Mês atual</div>
+                    <div style="font-size:13px;font-weight:600;">R$ 317.400</div>
+                  </div>
+                  <div style="background:#f5f5f5;border-radius:4px;padding:8px 10px;">
+                    <div style="font-size:10px;color:#888;margin-bottom:2px;">Mês anterior</div>
+                    <div style="font-size:13px;font-weight:600;">R$ 230.000</div>
+                  </div>
+                  <div style="background:#FFEBEE;border-radius:4px;padding:8px 10px;">
+                    <div style="font-size:10px;color:#888;margin-bottom:2px;">Variação</div>
+                    <div style="font-size:13px;font-weight:600;color:#C62828;">+38% / +R$ 87.400</div>
+                  </div>
+                </div>
+                <div style="font-size:12px;color:#333;line-height:1.6;margin-bottom:8px;">
+                  <strong>Motivo identificado:</strong> Nota fiscal de R$ 89.200 da fornecedora Eletropaulo foi lançada incorretamente no centro de responsabilidade <strong>"TI" (cod. 0042)</strong> em 14/03/2025. Nos 11 meses anteriores, esse fornecedor estava vinculado ao CR <strong>"Operações" (cod. 0011)</strong>. Trata-se de erro de classificação no lançamento.
+                </div>
+                <div style="font-size:12px;color:#555;">
+                  <strong>Acumulado 12 meses:</strong> +62% ⚠ &nbsp;|&nbsp; <strong>QoQ:</strong> +21% &nbsp;|&nbsp; <strong>YoY:</strong> +44%
+                </div>
+                <div style="margin-top:10px;padding-top:8px;border-top:1px solid #f0f0f0;">
+                  <div style="font-size:11px;color:#888;margin-bottom:4px;">Ação recomendada:</div>
+                  <span class="action-tag">Corrigir CR no Sinqia</span>
+                  <span class="action-tag">Contatar time de TI para confirmar</span>
+                  <span class="action-tag">Atualizar vínculo no Jestor</span>
+                </div>
+              </div>
+
+              <div style="border:1px solid #FFCDD2;border-radius:6px;padding:14px 16px;margin-bottom:16px;background:#fff;">
+                <div style="font-size:13px;font-weight:700;color:#C62828;margin-bottom:6px;">2. 101-5 Licença de Software — Variação de +52% (+R$ 124.000)</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+                  <div style="background:#f5f5f5;border-radius:4px;padding:8px 10px;">
+                    <div style="font-size:10px;color:#888;margin-bottom:2px;">Mês atual</div>
+                    <div style="font-size:13px;font-weight:600;">R$ 362.000</div>
+                  </div>
+                  <div style="background:#f5f5f5;border-radius:4px;padding:8px 10px;">
+                    <div style="font-size:10px;color:#888;margin-bottom:2px;">Mês anterior</div>
+                    <div style="font-size:13px;font-weight:600;">R$ 238.000</div>
+                  </div>
+                  <div style="background:#FFEBEE;border-radius:4px;padding:8px 10px;">
+                    <div style="font-size:10px;color:#888;margin-bottom:2px;">Variação</div>
+                    <div style="font-size:13px;font-weight:600;color:#C62828;">+52% / +R$ 124.000</div>
+                  </div>
+                </div>
+                <div style="font-size:12px;color:#333;line-height:1.6;margin-bottom:8px;">
+                  <strong>Motivo:</strong> Causa não identificada automaticamente. Nenhuma solicitação de compra de software foi registrada no Jestor em março/2025, e não há lançamento em CR incorreto detectado. Possível fatura de renovação anual ou compra realizada fora do fluxo padrão.
+                </div>
+                <div style="font-size:12px;color:#555;">
+                  <strong>Acumulado 12 meses:</strong> +31% &nbsp;|&nbsp; <strong>QoQ:</strong> +47% ⚠ &nbsp;|&nbsp; <strong>YoY:</strong> +18%
+                </div>
+                <div style="margin-top:10px;padding-top:8px;border-top:1px solid #f0f0f0;">
+                  <div style="font-size:11px;color:#888;margin-bottom:4px;">Ação recomendada:</div>
+                  <span class="action-tag">Investigar fatura de origem</span>
+                  <span class="action-tag">Consultar área de TI / Compras</span>
+                  <span class="action-tag">Verificar se há renovação anual</span>
+                </div>
+              </div>
+
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:8px;">⚡ Alertas Moderados</div>
+              <div style="border:1px solid #FFE0B2;border-radius:6px;padding:12px 16px;margin-bottom:8px;background:#fff;">
+                <div style="font-size:13px;font-weight:600;color:#E65100;margin-bottom:4px;">112-0 Telefone e Internet — +12% (+R$ 14.200)</div>
+                <div style="font-size:12px;color:#555;">Variação dentro do padrão esperado para o período. Monitoramento contínuo recomendado.</div>
+              </div>
+              <div style="border:1px solid #FFE0B2;border-radius:6px;padding:12px 16px;margin-bottom:16px;background:#fff;">
+                <div style="font-size:13px;font-weight:600;color:#E65100;margin-bottom:4px;">115/09 Contas de People — +9% (Acumulado 6m: +28%)</div>
+                <div style="font-size:12px;color:#555;">Crescimento consistente no acumulado. Verificar se reflete expansão planejada de headcount.</div>
+              </div>
+
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:8px;">✅ Contas sem alerta</div>
+              <div style="font-size:12px;color:#555;line-height:1.6;padding:10px 14px;background:#F1F8E9;border-radius:6px;margin-bottom:14px;">
+                19 contas dentro dos parâmetros: 73-6 Conta de aluguel · 76-0 Associações · 97-3 Infraestrutura · e demais contas monitoradas.
+              </div>
+
+              <div style="font-size:12px;color:#999;padding-top:12px;border-top:1px solid #e8e8e8;">
+                Relatório gerado automaticamente pelo Agente de Fechamento Contábil via Databricks Genie. Fonte: Sinqia (lake atualizado em 10/04/2025 às 06:14). Revisão humana recomendada antes de ações corretivas.
+              </div>
+            </div>
+
+            <div class="feedback-row">
+              <div class="feedback-left">
+                Is this useful?
+                <button class="thumb-btn">👍</button>
+                <button class="thumb-btn">👎</button>
+              </div>
+              <button class="download-btn">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v9M5 8l3 3 3-3" stroke="#1976D2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="#1976D2" stroke-width="1.5" stroke-linecap="round"/></svg>
+                Download PDF
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- INPUT -->
+    <div class="input-area">
+      <div class="input-box" style="padding:0;display:flex;align-items:center;position:relative;z-index:100;">
+        <input id="chat-input" type="text" placeholder="Ask your question..." autocomplete="off" style="border:none;outline:none;flex:1;font-size:13px;color:#333;padding:10px 14px;background:#fff;width:100%;border-radius:6px 0 0 6px;-webkit-appearance:none;appearance:none;pointer-events:auto;" onkeydown="if(event.key==='Enter')sendMessage()" />
+        <button onclick="sendMessage()" style="background:#E53935;border:none;border-radius:0 6px 6px 0;padding:0 16px;height:40px;cursor:pointer;color:#fff;font-size:14px;flex-shrink:0;">➤</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="input-tabs">
+          <button class="input-tab">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M7 2v10" stroke="#555" stroke-width="1.4" stroke-linecap="round"/></svg>
+            Chat
+          </button>
+          <button class="input-tab" style="border-color:#E53935;color:#E53935;">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M7 1L13 4.5V9.5L7 13L1 9.5V4.5L7 1Z" fill="#E53935" opacity="0.8"/></svg>
+            Agent
+          </button>
+        </div>
+        <span class="footer-note">Always review the accuracy of responses.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const details = {
+  energia: {
+    title: '94-9 Energia elétrica',
+    userQ: 'Ver detalhes: 94-9 Energia elétrica',
+    atual: 'R$ 317.400', anterior: 'R$ 230.000', var: '+38% / +R$ 87.400',
+    pct: '+38% ⚠ acima do limite de 5%',
+    rs: '+R$ 87.400 ⚠ acima do limite de R$ 10k',
+    acum: '+62% nos últimos 12 meses ⚠',
+    qoq: '+21% (Q1 2025 vs. Q4 2024)',
+    yoy: '+44% (mar/25 vs. mar/24)',
+    ai: 'A conta de energia elétrica apresenta variação de 38% em relação ao mês anterior, totalizando +R$ 87.400. O acumulado de 12 meses atingiu 62%, bem acima do threshold configurado. Todos os três critérios de alerta foram acionados simultaneamente (%, R$ e acumulado), indicando anomalia de alta relevância.',
+    jestor: 'Identificado: nota fiscal de R$ 89.200 lançada no centro de responsabilidade "TI" (cod. 0042) em 14/03/2025. O fornecedor Eletropaulo constava vinculado ao CR "Operações" (cod. 0011) nos 11 meses anteriores. Possível erro de classificação no lançamento.',
+    actions: ['Corrigir CR no Sinqia', 'Contatar time de TI para confirmar', 'Atualizar vínculo no Jestor']
+  },
+  software: {
+    title: '101-5 Licença de software',
+    userQ: 'Ver detalhes: 101-5 Licença de software',
+    atual: 'R$ 362.000', anterior: 'R$ 238.000', var: '+52% / +R$ 124.000',
+    pct: '+52% ⚠ acima do limite de 5%',
+    rs: '+R$ 124.000 ⚠ acima do limite de R$ 10k',
+    acum: '+31% nos últimos 12 meses',
+    qoq: '+47% (Q1 2025 vs. Q4 2024) ⚠',
+    yoy: '+18% (mar/25 vs. mar/24)',
+    ai: 'A conta de licença de software apresenta variação expressiva de 52% frente ao mês anterior (+R$ 124.000). Não foram encontrados registros correspondentes no Jestor que justifiquem o aumento — nenhuma nova solicitação de compra de software foi identificada no período. A causa não pôde ser determinada automaticamente e requer investigação manual.',
+    jestor: 'Nenhum pagamento a maior ou lançamento em CR incorreto identificado no período. Não há solicitação registrada para novas licenças em março/2025. Verificar se há fatura de renovação anual ou compra fora do fluxo padrão do Jestor.',
+    actions: ['Investigar fatura de origem', 'Consultar área de TI / Compras', 'Verificar se há renovação anual']
+  }
+};
+
+function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim().toLowerCase();
+  if (!text) return;
+  const reportKeywords = ['relatório', 'relatorio', 'report', 'gere', 'gerar', 'crie', 'criar', 'envie', 'enviar', 'time contábil', 'time contabil', 'contábil', 'contabil'];
+  const isReport = reportKeywords.some(k => text.includes(k));
+  if (isReport) {
+    document.getElementById('report-user-q').textContent = input.value;
+    goTo(3);
+  }
+  input.value = '';
+}
+
+function goTo(screen, detail) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen' + screen).classList.add('active');
+  document.querySelector('.messages').scrollTop = 0;
+  if (detail) {
+    const d = details[detail];
+    document.getElementById('detail-user-q').textContent = d.userQ;
+    document.getElementById('detail-title').textContent = d.title;
+    document.getElementById('detail-atual').textContent = d.atual;
+    document.getElementById('detail-anterior').textContent = d.anterior;
+    document.getElementById('detail-var').textContent = d.var;
+    document.getElementById('d-pct').textContent = d.pct;
+    document.getElementById('d-rs').textContent = d.rs;
+    document.getElementById('d-acum').textContent = d.acum;
+    document.getElementById('d-qoq').textContent = d.qoq;
+    document.getElementById('d-yoy').textContent = d.yoy;
+    document.getElementById('ai-diag').textContent = d.ai;
+    document.getElementById('jestor-diag').textContent = d.jestor;
+    document.getElementById('action-tags').innerHTML = d.actions.map(a => '<span class="action-tag">' + a + '</span>').join('');
+  }
+}
+</script>
+</body>
+</html>
